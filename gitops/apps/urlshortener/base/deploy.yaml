@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: urlshortener, labels: { app: urlshortener } }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: urlshortener } }
+  template:
+    metadata: { labels: { app: urlshortener } }
+    spec:
+      containers:
+      - name: app
+        image: nginx:alpine   # 임시 이미지 (후에 Harbor로 교체)
+        ports: [{ containerPort: 80 }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: urlshortener }
+spec:
+  selector: { app: urlshortener }
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: urlshortener
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/target-type: ip
+spec:
+  ingressClassName: alb
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend: { service: { name: urlshortener, port: { number: 80 } } }

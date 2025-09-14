@@ -1,0 +1,26 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: aws-load-balancer-controller
+  namespace: kube-system
+spec:
+  interval: 1m
+  chart:
+    spec:
+      chart: aws-load-balancer-controller
+      version: 1.8.1
+      sourceRef:
+        kind: HelmRepository
+        name: aws
+        namespace: flux-system
+  values:
+    clusterName: urlshortener-eks 
+    serviceAccount:
+      create: true
+      name: aws-load-balancer-controller
+  valuesFrom:
+    - kind: ConfigMap
+      name: flux-irsa
+      valuesKey: albRoleArn
+      # 점(.)은 이스케이프 필요, 따옴표 쓰지 말 것
+      targetPath: serviceAccount.annotations.eks\.amazonaws\.com/role-arn

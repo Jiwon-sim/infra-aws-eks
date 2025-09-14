@@ -1,0 +1,15 @@
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata: { name: aws, namespace: flux-system }
+spec: { url: https://aws.github.io/eks-charts, interval: 1m }
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata: { name: bitnami, namespace: flux-system }
+spec: { url: https://charts.bitnami.com/bitnami, interval: 1m }
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata: { name: metrics-server, namespace: flux-system }
+spec: { url: https://kubernetes-sigs.github.io/metrics-server/, interval: 1m }
+
