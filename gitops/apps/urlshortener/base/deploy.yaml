@@ -9,7 +9,8 @@ spec:
     spec:
       containers:
       - name: app
-        image: harbor.example.com/urlshortener/app:124
+        image: urlshortener:124
+        imagePullPolicy: Never
         ports: [{ containerPort: 3000 }]
         resources:
           requests:

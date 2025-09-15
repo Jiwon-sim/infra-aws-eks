@@ -5,10 +5,10 @@ resources:
   - ../base
   - ns.yaml
 
-images:
-  - name: harbor.example.com/urlshortener/app
-    newName: harbor.tlawl.com/urlshortener/app
-    newTag: "124"
+# images:
+#   - name: harbor.example.com/urlshortener/app
+#     newName: harbor.tlawl.com/urlshortener/app
+#     newTag: "124"
 
 patchesStrategicMerge:
   - ingress-patch.yaml
