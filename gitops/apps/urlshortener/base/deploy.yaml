@@ -9,8 +9,18 @@ spec:
     spec:
       containers:
       - name: app
-        image: nginx:alpine   # 임시 이미지 (후에 Harbor로 교체)
-        ports: [{ containerPort: 80 }]
+        image: harbor.example.com/urlshortener/app:124
+        ports: [{ containerPort: 3000 }]
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        env:
+        - name: REDIS_URL
+          value: "redis://redis-master:6379"
 ---
 apiVersion: v1
 kind: Service
@@ -20,7 +30,7 @@ spec:
   ports:
   - name: http
     port: 80
-    targetPort: 80
+    targetPort: 3000
     protocol: TCP
 ---
 apiVersion: networking.k8s.io/v1
@@ -34,7 +44,8 @@ metadata:
 spec:
   ingressClassName: alb
   rules:
-  - http:
+  - host: short.tlawl.com
+    http:
       paths:
       - path: /
         pathType: Prefix

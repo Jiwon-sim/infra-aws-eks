@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../base
+- ns.yaml
+
+images:
+- name: harbor.example.com/urlshortener/app
+  digest: sha256:abc123def456789012345678901234567890123456789012345678901234567890
+
+patchesStrategicMerge:
+- deployment-patch.yaml
+- ingress-patch.yaml
