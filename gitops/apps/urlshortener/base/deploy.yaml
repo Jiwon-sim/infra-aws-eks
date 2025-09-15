@@ -9,8 +9,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: urlshortener:124
-        imagePullPolicy: Never
+        image: harbor.tlawl.com/urlshortener/app:124
         ports: [{ containerPort: 3000 }]
         resources:
           requests:
