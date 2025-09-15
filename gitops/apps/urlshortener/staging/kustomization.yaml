@@ -4,3 +4,10 @@ namespace: urlshortener-staging
 resources:
   - ../base
   - ns.yaml
+
+images:
+  - name: harbor.example.com/urlshortener/app
+    newTag: "124"
+
+patchesStrategicMerge:
+  - ingress-patch.yaml
