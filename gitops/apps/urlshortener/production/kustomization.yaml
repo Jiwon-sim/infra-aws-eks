@@ -6,7 +6,7 @@ resources:
 - ns.yaml
 
 images:
-- name: harbor.example.com/urlshortener/app
+- name: harbor.tlawl.com/urlshortener/app
   digest: sha256:abc123def456789012345678901234567890123456789012345678901234567890
 
 patchesStrategicMerge:
