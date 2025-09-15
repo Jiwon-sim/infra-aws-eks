@@ -1,0 +1,81 @@
+pipeline {
+    agent any
+    
+    parameters {
+        string(name: 'BUILD_NUMBER', description: 'Build number to promote')
+    }
+    
+    environment {
+        HARBOR_URL = 'harbor.example.com'
+        IMAGE_NAME = 'urlshortener/app'
+    }
+    
+    stages {
+        stage('DAST Scan') {
+            steps {
+                script {
+                    sh """
+                    kubectl apply -f ci/dast-pipeline.yaml
+                    kubectl wait --for=condition=complete job/dast-scan -n urlshortener-staging --timeout=600s
+                    """
+                    
+                    def jobStatus = sh(
+                        script: "kubectl get job dast-scan -n urlshortener-staging -o jsonpath='{.status.conditions[0].type}'",
+                        returnStdout: true
+                    ).trim()
+                    
+                    if (jobStatus != 'Complete') {
+                        slackSend(channel: '#ci-cd-alerts',
+                                 color: 'danger',
+                                 message: "❌ DAST Failed: Security scan failed for build ${params.BUILD_NUMBER}")
+                        error "DAST scan failed"
+                    }
+                    
+                    slackSend(channel: '#ci-cd-alerts',
+                             color: 'good',
+                             message: "✅ DAST Passed: Security scan completed for build ${params.BUILD_NUMBER}")
+                }
+            }
+        }
+        
+        stage('Get Image Digest') {
+            steps {
+                script {
+                    env.IMAGE_DIGEST = sh(
+                        script: "skopeo inspect docker://${HARBOR_URL}/${IMAGE_NAME}:${params.BUILD_NUMBER} | jq -r '.Digest'",
+                        returnStdout: true
+                    ).trim()
+                }
+            }
+        }
+        
+        stage('Update Production') {
+            steps {
+                script {
+                    sh """
+                    cd gitops/apps/urlshortener/production
+                    kustomize edit set image ${HARBOR_URL}/${IMAGE_NAME}@${env.IMAGE_DIGEST}
+                    git add .
+                    git commit -m "Promote build ${params.BUILD_NUMBER} to production (digest: ${env.IMAGE_DIGEST})"
+                    git push origin main
+                    """
+                    
+                    slackSend(channel: '#ci-cd-alerts',
+                             color: 'good',
+                             message: "🚀 Production Updated: urlshortener promoted to production (build ${params.BUILD_NUMBER})")
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            sh "kubectl delete job dast-scan -n urlshortener-staging --ignore-not-found=true"
+        }
+        failure {
+            slackSend(channel: '#ci-cd-alerts',
+                     color: 'danger',
+                     message: "❌ Production Promotion Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
+        }
+    }
+}

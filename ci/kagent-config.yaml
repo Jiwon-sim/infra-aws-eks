@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kagent-config
+  namespace: kagent
+data:
+  config.yaml: |
+    jenkins:
+      url: "http://jenkins.jenkins.svc.cluster.local:8080"
+      username: "admin"
+      token: "${JENKINS_TOKEN}"
+    
+    slack:
+      webhook: "${SLACK_WEBHOOK}"
+      channel: "#ci-cd-alerts"
+    
+    monitoring:
+      - name: "urlshortener-staging"
+        namespace: "urlshortener-staging"
+        deployment: "urlshortener"
+        actions:
+          - trigger: "deployment_failed"
+            action: "rollback"
+            jenkins_job: "urlshortener-rollback"
+          - trigger: "high_error_rate"
+            action: "alert"
+            threshold: "5%"
+      
+      - name: "urlshortener-production"
+        namespace: "urlshortener-production"
+        deployment: "urlshortener"
+        actions:
+          - trigger: "deployment_failed"
+            action: "rollback_only"  # 안전성을 위해 롤백만 허용
+          - trigger: "high_error_rate"
+            action: "alert"
+            threshold: "1%"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kagent
+  namespace: kagent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kagent
+  template:
+    metadata:
+      labels:
+        app: kagent
+    spec:
+      containers:
+      - name: kagent
+        image: kagent:latest
+        env:
+        - name: CONFIG_PATH
+          value: "/config/config.yaml"
+        - name: JENKINS_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: jenkins-credentials
+              key: token
+        - name: SLACK_WEBHOOK
+          valueFrom:
+            secretKeyRef:
+              name: slack-credentials
+              key: webhook
+        volumeMounts:
+        - name: config
+          mountPath: /config
+      volumes:
+      - name: config
+        configMap:
+          name: kagent-config

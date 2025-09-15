@@ -12,4 +12,19 @@ apiVersion: source.toolkit.fluxcd.io/v1beta2
 kind: HelmRepository
 metadata: { name: metrics-server, namespace: flux-system }
 spec: { url: https://kubernetes-sigs.github.io/metrics-server/, interval: 1m }
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata: { name: jenkins, namespace: flux-system }
+spec: { url: https://charts.jenkins.io, interval: 1m }
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata: { name: sonarqube, namespace: flux-system }
+spec: { url: https://SonarSource.github.io/helm-chart-sonarqube, interval: 1m }
+---
+apiVersion: source.toolkit.fluxcd.io/v1beta2
+kind: HelmRepository
+metadata: { name: harbor, namespace: flux-system }
+spec: { url: https://helm.goharbor.io, interval: 1m }
 

@@ -1,0 +1,162 @@
+pipeline {
+    agent {
+        kubernetes {
+            yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:debug
+    command: ["/busybox/cat"]
+    tty: true
+    volumeMounts:
+    - name: docker-config
+      mountPath: /kaniko/.docker
+  - name: trivy
+    image: aquasec/trivy:latest
+    command: ["/bin/sh"]
+    tty: true
+  - name: cosign
+    image: gcr.io/projectsigstore/cosign:latest
+    command: ["/busybox/sh"]
+    tty: true
+  volumes:
+  - name: docker-config
+    secret:
+      secretName: harbor-docker-config
+"""
+        }
+    }
+    
+    environment {
+        HARBOR_REGISTRY = 'harbor.example.com'
+        IMAGE_NAME = 'urlshortener/app'
+        GIT_COMMIT_SHORT = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+        IMAGE_TAG = "${BUILD_NUMBER}-${GIT_COMMIT_SHORT}"
+        FULL_IMAGE = "${HARBOR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        
+        stage('SAST - SonarQube') {
+            steps {
+                script {
+                    // SonarQube 스캔
+                    sh '''
+                        echo "Running SonarQube SAST scan..."
+                        # sonar-scanner 실행 (추후 구현)
+                    '''
+                }
+            }
+        }
+        
+        stage('Build & Push Image') {
+            steps {
+                container('kaniko') {
+                    sh """
+                        /kaniko/executor \\
+                            --dockerfile=Dockerfile \\
+                            --context=. \\
+                            --destination=${FULL_IMAGE} \\
+                            --cache=true
+                    """
+                }
+            }
+        }
+        
+        stage('SCA & Image Scan - Trivy') {
+            parallel {
+                stage('SCA Scan') {
+                    steps {
+                        container('trivy') {
+                            sh """
+                                trivy fs --format json --output trivy-sca.json .
+                                trivy fs --severity HIGH,CRITICAL .
+                            """
+                        }
+                    }
+                }
+                stage('Image Scan') {
+                    steps {
+                        container('trivy') {
+                            sh """
+                                trivy image --format json --output trivy-image.json ${FULL_IMAGE}
+                                trivy image --severity HIGH,CRITICAL ${FULL_IMAGE}
+                            """
+                        }
+                    }
+                }
+                stage('SBOM Generation') {
+                    steps {
+                        container('trivy') {
+                            sh """
+                                trivy image --format spdx-json --output sbom.json ${FULL_IMAGE}
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Image Signing - Cosign') {
+            steps {
+                container('cosign') {
+                    withCredentials([
+                        file(credentialsId: 'cosign-private-key', variable: 'COSIGN_KEY'),
+                        string(credentialsId: 'cosign-password', variable: 'COSIGN_PASSWORD')
+                    ]) {
+                        sh """
+                            cosign sign --key \${COSIGN_KEY} ${FULL_IMAGE}
+                        """
+                    }
+                }
+            }
+        }
+        
+        stage('Update Staging') {
+            steps {
+                script {
+                    // GitOps: staging overlay 업데이트
+                    sh """
+                        git config user.name "Jenkins"
+                        git config user.email "jenkins@tlawl.com"
+                        
+                        # staging kustomization.yaml 업데이트
+                        cd gitops/apps/urlshortener/staging
+                        kustomize edit set image harbor.example.com/urlshortener/app=${FULL_IMAGE}
+                        
+                        git add .
+                        git commit -m "Update staging image to ${IMAGE_TAG}"
+                        git push origin main
+                    """
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            archiveArtifacts artifacts: '*.json', allowEmptyArchive: true
+        }
+        success {
+            slackSend(
+                channel: '#ci-cd',
+                color: 'good',
+                message: "✅ CI Success: ${env.JOB_NAME} #${env.BUILD_NUMBER}\\nImage: ${FULL_IMAGE}\\nCommit: ${GIT_COMMIT_SHORT}"
+            )
+        }
+        failure {
+            slackSend(
+                channel: '#ci-cd',
+                color: 'danger',
+                message: "❌ CI Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}\\nCommit: ${GIT_COMMIT_SHORT}\\nLogs: ${env.BUILD_URL}"
+            )
+        }
+    }
+}

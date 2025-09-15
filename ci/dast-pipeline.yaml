@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dast-scan
+  namespace: urlshortener-staging
+spec:
+  template:
+    spec:
+      containers:
+      - name: zap
+        image: ghcr.io/zaproxy/zaproxy:stable
+        command: ["/zap/zap-baseline.py"]
+        args:
+          - "-t"
+          - "http://urlshortener.urlshortener-staging.svc.cluster.local"
+          - "-J"
+          - "/zap/wrk/report.json"
+          - "-r"
+          - "/zap/wrk/report.html"
+        volumeMounts:
+        - name: reports
+          mountPath: /zap/wrk
+      volumes:
+      - name: reports
+        emptyDir: {}
+      restartPolicy: Never
